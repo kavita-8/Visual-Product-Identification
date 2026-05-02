@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visual Product Recognition — VPRX</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+  :root {
+    --bg-void: #06060a;
+    --bg-deep: #0b0b12;
+    --bg-glass: rgba(255,255,255,0.03);
+    --bg-glass-hover: rgba(255,255,255,0.06);
+    --border-ghost: rgba(255,255,255,0.07);
+    --border-glow: rgba(139,92,246,0.4);
+    --accent-violet: #7c3aed;
+    --accent-cyan: #06b6d4;
+    --accent-fuchsia: #a855f7;
+    --glow-violet: rgba(124,58,237,0.15);
+    --glow-cyan: rgba(6,182,212,0.15);
+    --text-primary: rgba(255,255,255,0.92);
+    --text-secondary: rgba(255,255,255,0.45);
+    --text-tertiary: rgba(255,255,255,0.22);
+    --font-display: 'Cormorant Garamond', serif;
+    --font-ui: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg-void);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    min-height: 100vh;
+    overflow-x: hidden;
+    cursor: default;
+  }
+
+  /* NEBULA BACKGROUND */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% -10%, rgba(124,58,237,0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 110%, rgba(6,182,212,0.09) 0%, transparent 55%),
+      radial-gradient(ellipse 40% 60% at 50% 50%, rgba(168,85,247,0.04) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  /* GRAIN TEXTURE */
+  body::after {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.035'/%3E%3C/svg%3E");
+    pointer-events: none; opacity: 0.6;
+  }
+
+  .z-content { position: relative; z-index: 1; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(124,58,237,0.4); border-radius: 2px; }
+
+  /* GLASS CARD */
+  .glass {
+    background: var(--bg-glass);
+    border: 1px solid var(--border-ghost);
+    backdrop-filter: blur(24px) saturate(1.4);
+    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  }
+
+  .glass:hover { background: var(--bg-glass-hover); }
+
+  /* GLOWING BORDERS */
+  .glow-border {
+    box-shadow: 0 0 0 1px rgba(124,58,237,0.3), inset 0 0 30px rgba(124,58,237,0.04);
+  }
+
+  /* SCAN LINE ANIMATION */
+  @keyframes scan-down {
+    0% { transform: translateY(-100%); opacity: 0; }
+    5% { opacity: 1; }
+    95% { opacity: 1; }
+    100% { transform: translateY(calc(100vh)); opacity: 0; }
+  }
+
+  @keyframes scan-pulse {
+    0%, 100% { transform: translateY(-100%); }
+    50% { transform: translateY(400px); }
+  }
+
+  .scan-line {
+    position: absolute; left: 0; right: 0; height: 2px; z-index: 10;
+    background: linear-gradient(90deg, transparent 0%, var(--accent-cyan) 20%, rgba(255,255,255,0.9) 50%, var(--accent-cyan) 80%, transparent 100%);
+    box-shadow: 0 0 20px 4px rgba(6,182,212,0.6), 0 0 60px 10px rgba(6,182,212,0.2);
+    animation: scan-pulse 2s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  /* DROP ZONE */
+  .drop-zone {
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+    border: 1px dashed rgba(255,255,255,0.12);
+  }
+
+  .drop-zone.drag-over {
+    border-color: var(--accent-violet);
+    background: rgba(124,58,237,0.08);
+    box-shadow: 0 0 60px rgba(124,58,237,0.2), inset 0 0 40px rgba(124,58,237,0.05);
+    transform: scale(1.005);
+  }
+
+  /* FLOATING STATUS PANEL */
+  .status-panel {
+    position: fixed; bottom: 28px; right: 28px; z-index: 100;
+    width: 280px;
+    background: rgba(6,6,10,0.85);
+    border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(40px) saturate(1.5);
+    border-radius: 16px;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .status-panel.collapsed { width: 48px; height: 48px; cursor: pointer; }
+  .status-panel.collapsed .panel-content { opacity: 0; pointer-events: none; }
+
+  /* RESULT CARDS */
+  .result-card {
+    break-inside: avoid;
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: card-enter 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  }
+
+  @keyframes card-enter {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .result-card:hover { transform: translateY(-4px) scale(1.01); z-index: 2; }
+  .result-card:hover .card-overlay { opacity: 1; }
+  .result-card:hover .card-actions { transform: translateY(0); opacity: 1; }
+
+  .card-overlay {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, rgba(6,6,10,0.85) 0%, rgba(6,6,10,0.2) 50%, transparent 100%);
+    opacity: 0.7;
+    transition: opacity 0.3s;
+  }
+
+  .card-actions {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 14px;
+    transform: translateY(8px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  /* SCORE BADGE GLOW */
+  .score-high { box-shadow: 0 0 16px rgba(34,197,94,0.4); border-color: rgba(34,197,94,0.6) !important; }
+  .score-med { box-shadow: 0 0 16px rgba(234,179,8,0.3); border-color: rgba(234,179,8,0.5) !important; }
+  .score-low { box-shadow: 0 0 16px rgba(239,68,68,0.3); border-color: rgba(239,68,68,0.5) !important; }
+
+  /* MASONRY */
+  .masonry {
+    columns: 4;
+    column-gap: 16px;
+  }
+
+  @media (max-width: 1200px) { .masonry { columns: 3; } }
+  @media (max-width: 800px) { .masonry { columns: 2; } }
+  @media (max-width: 500px) { .masonry { columns: 1; } }
+
+  .masonry .result-card { margin-bottom: 16px; }
+
+  /* LIGHTBOX */
+  .lightbox {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.92);
+    backdrop-filter: blur(20px);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  .lightbox.open { opacity: 1; pointer-events: all; }
+  .lightbox-img { max-width: 85vw; max-height: 82vh; object-fit: contain; border-radius: 12px; box-shadow: 0 40px 120px rgba(0,0,0,0.8); }
+
+  /* CAMERA MODAL */
+  .camera-modal {
+    position: fixed; inset: 0; z-index: 150;
+    background: rgba(0,0,0,0.94);
+    backdrop-filter: blur(20px);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.4s;
+  }
+
+  .camera-modal.open { opacity: 1; pointer-events: all; }
+
+  .lens-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(6,182,212,0.4);
+    animation: lens-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes lens-pulse {
+    0%, 100% { transform: scale(1); opacity: 0.4; }
+    50% { transform: scale(1.05); opacity: 0.8; }
+  }
+
+  /* BUTTON STYLES */
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent-violet) 0%, var(--accent-fuchsia) 100%);
+    border: none; color: white;
+    font-family: var(--font-ui); font-size: 13px; font-weight: 600; letter-spacing: 0.05em;
+    padding: 12px 28px; border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+    box-shadow: 0 4px 24px rgba(124,58,237,0.35);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 32px rgba(124,58,237,0.5);
+  }
+
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .btn-ghost {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1); color: var(--text-primary);
+    font-family: var(--font-ui); font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+    padding: 9px 18px; border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+
+  .btn-ghost:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+
+  .btn-sm {
+    font-size: 11px; padding: 6px 14px; border-radius: 7px;
+  }
+
+  /* MONO LABEL */
+  .mono { font-family: var(--font-mono); }
+
+  /* PULSE DOT */
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.85); }
+  }
+
+  .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+  /* HEADER LINE */
+  .header-line {
+    background: linear-gradient(90deg, var(--accent-violet), var(--accent-cyan), transparent);
+    height: 1px;
+  }
+
+  /* NUMBER TICKER */
+  @keyframes count-up {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .tick { animation: count-up 0.4s ease forwards; }
+
+  /* TOP K SLIDER */
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 3px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px; outline: none;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-violet), var(--accent-cyan));
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(124,58,237,0.6);
+  }
+
+  /* TYPING EFFECT */
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+
+  .cursor-blink::after {
+    content: '|';
+    animation: blink 1.2s step-end infinite;
+    color: var(--accent-cyan);
+  }
+
+  /* LATENCY BAR */
+  .latency-bar {
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-violet));
+    border-radius: 2px;
+    transition: width 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+    box-shadow: 0 0 8px rgba(6,182,212,0.5);
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════ HEADER -->
+<header class="z-content sticky top-0 z-50" style="background: rgba(6,6,10,0.8); backdrop-filter: blur(24px); border-bottom: 1px solid var(--border-ghost);">
+  <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+    <div class="flex items-center gap-4">
+      <div style="width:34px;height:34px;background:linear-gradient(135deg,#7c3aed,#06b6d4);border-radius:8px;display:flex;align-items:center;justify-content:center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><circle cx="11" cy="11" r="3"/></svg>
+      </div>
+      <div>
+        <div style="font-family:var(--font-display);font-size:18px;font-weight:600;letter-spacing:0.02em;line-height:1;">Visual Product Recognition</div>
+        <div class="mono" style="font-size:10px;color:var(--text-secondary);letter-spacing:0.12em;margin-top:1px;">VPRX · CLIP+FAISS ENGINE v1.0</div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-6">
+      <div id="header-status" class="flex items-center gap-2">
+        <div class="pulse-dot" style="width:7px;height:7px;border-radius:50%;background:#ef4444;"></div>
+        <span class="mono" style="font-size:11px;color:var(--text-secondary);">CONNECTING…</span>
+      </div>
+      <div class="mono" style="font-size:11px;color:var(--text-tertiary);" id="clock">--:--:--</div>
+    </div>
+  </div>
+  <div class="header-line"></div>
+</header>
+
+<!-- ═══════════════════════════════════════════ MAIN -->
+<main class="z-content max-w-7xl mx-auto px-6 py-12">
+
+  <!-- HERO TITLE -->
+  <div class="text-center mb-14">
+    <div class="mono" style="font-size:11px;letter-spacing:0.25em;color:var(--accent-cyan);text-transform:uppercase;margin-bottom:12px;">Deep Learning · Semantic Similarity Search</div>
+    <h1 style="font-family:var(--font-display);font-size:clamp(40px,6vw,76px);font-weight:300;letter-spacing:-0.01em;line-height:1.05;">
+      Identify Any<br><em style="font-style:italic;background:linear-gradient(135deg,#a855f7,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Product</em> Instantly
+    </h1>
+    <p style="font-size:15px;color:var(--text-secondary);margin-top:16px;max-width:480px;margin-inline:auto;line-height:1.7;">
+      Upload or capture an image. The engine extracts CLIP embeddings and queries the FAISS index to surface visually similar products in milliseconds.
+    </p>
+  </div>
+
+  <!-- ─────────── SEARCH INTERFACE ─────────── -->
+  <div class="grid gap-6" style="grid-template-columns: 1fr 320px;">
+
+    <!-- DROP ZONE + PREVIEW -->
+    <div>
+      <div id="dropZone" class="drop-zone glass rounded-2xl relative overflow-hidden" style="min-height:360px;cursor:pointer;" onclick="document.getElementById('fileInput').click()">
+
+        <!-- EMPTY STATE -->
+        <div id="emptyState" class="flex flex-col items-center justify-center h-full absolute inset-0 p-8">
+          <div style="width:80px;height:80px;border-radius:20px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.25);display:flex;align-items:center;justify-content:center;margin-bottom:20px;">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(139,92,246,0.8)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <div style="font-size:18px;font-weight:600;margin-bottom:8px;">Drop an image here</div>
+          <div style="font-size:13px;color:var(--text-secondary);text-align:center;line-height:1.6;">
+            Supports JPG, PNG, WebP, BMP, TIFF<br>
+            <span class="mono" style="font-size:11px;color:var(--text-tertiary);">or click to browse files</span>
+          </div>
+          <div style="margin-top:24px;display:flex;gap:8px;align-items:center;">
+            <div style="width:40px;height:1px;background:var(--border-ghost);"></div>
+            <span class="mono" style="font-size:10px;color:var(--text-tertiary);letter-spacing:0.1em;">OR</span>
+            <div style="width:40px;height:1px;background:var(--border-ghost);"></div>
+          </div>
+          <button class="btn-ghost btn-sm" style="margin-top:16px;" onclick="event.stopPropagation(); openCamera()">
+            <span style="display:flex;align-items:center;gap:6px;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Capture from Camera
+            </span>
+          </button>
+        </div>
+
+        <!-- PREVIEW STATE -->
+        <div id="previewState" class="hidden absolute inset-0">
+          <img id="previewImg" style="width:100%;height:100%;object-fit:contain;border-radius:16px;" alt="Query image">
+          <div id="scanOverlay" class="hidden absolute inset-0 rounded-2xl overflow-hidden" style="border:2px solid rgba(6,182,212,0.5);">
+            <div class="scan-line"></div>
+            <div style="position:absolute;inset:0;background:rgba(6,182,212,0.04);"></div>
+            <div class="mono" style="position:absolute;top:12px;left:16px;font-size:11px;color:var(--accent-cyan);letter-spacing:0.1em;">ANALYZING…</div>
+            <div class="mono" style="position:absolute;bottom:12px;right:16px;font-size:11px;color:var(--accent-cyan);opacity:0.6;" id="scanPercent">0%</div>
+          </div>
+          <button class="btn-ghost btn-sm" style="position:absolute;top:12px;right:12px;" onclick="event.stopPropagation(); clearImage()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <input type="file" id="fileInput" accept="image/*" class="hidden">
+      </div>
+    </div>
+
+    <!-- CONTROLS PANEL -->
+    <div class="flex flex-col gap-4">
+
+      <!-- TOP-K CONTROL -->
+      <div class="glass rounded-xl p-5">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <div style="font-size:13px;font-weight:600;">Results Count</div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:1px;">Top-K similar products</div>
+          </div>
+          <div class="mono" style="font-size:28px;font-weight:500;background:linear-gradient(135deg,#a855f7,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;" id="topKDisplay">6</div>
+        </div>
+        <input type="range" id="topK" min="1" max="24" value="6" oninput="document.getElementById('topKDisplay').textContent=this.value">
+        <div class="flex justify-between mono" style="font-size:10px;color:var(--text-tertiary);margin-top:6px;">
+          <span>1</span><span>12</span><span>24</span>
+        </div>
+      </div>
+
+      <!-- SEARCH BUTTON -->
+      <button class="btn-primary" id="searchBtn" onclick="doSearch()" disabled>
+        <span id="searchBtnText" style="display:flex;align-items:center;justify-content:center;gap:8px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          Run Recognition
+        </span>
+      </button>
+
+      <!-- QUICK INFO -->
+      <div class="glass rounded-xl p-5" style="flex:1;">
+        <div class="mono" style="font-size:10px;letter-spacing:0.12em;color:var(--text-tertiary);text-transform:uppercase;margin-bottom:12px;">Engine Parameters</div>
+        <div class="flex flex-col gap-3">
+          <div class="flex justify-between items-center">
+            <span style="font-size:12px;color:var(--text-secondary);">Model</span>
+            <span class="mono" style="font-size:11px;color:var(--accent-cyan);">CLIP ViT-B/32</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span style="font-size:12px;color:var(--text-secondary);">Index Type</span>
+            <span class="mono" style="font-size:11px;color:var(--accent-cyan);">FAISS FlatIP</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span style="font-size:12px;color:var(--text-secondary);">Embedding Dim</span>
+            <span class="mono" style="font-size:11px;" id="statDim">—</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span style="font-size:12px;color:var(--text-secondary);">Distance</span>
+            <span class="mono" style="font-size:11px;color:var(--accent-cyan);">Cosine Sim</span>
+          </div>
+          <div style="height:1px;background:var(--border-ghost);margin:2px 0;"></div>
+          <div class="flex justify-between items-center">
+            <span style="font-size:12px;color:var(--text-secondary);">Indexed</span>
+            <span class="mono" style="font-size:11px;font-weight:500;" id="statIndexed">—</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span style="font-size:12px;color:var(--text-secondary);">Last Latency</span>
+            <span class="mono" style="font-size:11px;" id="statLatency">—</span>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;">
+          <div class="flex justify-between mb-1">
+            <span style="font-size:11px;color:var(--text-tertiary);">Query Speed</span>
+            <span class="mono" style="font-size:11px;color:var(--text-tertiary);" id="latLabel">—</span>
+          </div>
+          <div style="background:rgba(255,255,255,0.06);border-radius:2px;height:3px;">
+            <div class="latency-bar" id="latBar" style="width:0%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- REBUILD INDEX -->
+      <button class="btn-ghost btn-sm" onclick="rebuildIndex()" style="width:100%;justify-content:center;display:flex;gap:6px;align-items:center;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        Rebuild Index
+      </button>
+    </div>
+  </div>
+
+  <!-- ─────────── RESULTS SECTION ─────────── -->
+  <div id="resultsSection" style="margin-top:48px;">
+    <div id="resultsMeta" class="hidden flex items-center justify-between mb-6">
+      <div>
+        <div style="font-family:var(--font-display);font-size:24px;font-weight:300;" id="resultsTitle">Search Results</div>
+        <div class="mono" style="font-size:11px;color:var(--text-secondary);margin-top:2px;" id="resultsSub">—</div>
+      </div>
+      <button class="btn-ghost btn-sm" onclick="clearResults()">Clear Results</button>
+    </div>
+    <div class="masonry" id="resultsGrid"></div>
+    <div id="emptyResults" class="hidden text-center py-16">
+      <div style="font-size:48px;margin-bottom:12px;opacity:0.2;">◉</div>
+      <div style="color:var(--text-secondary);font-size:14px;">No matching products found in the index.</div>
+    </div>
+  </div>
+</main>
+
+<!-- ═══════════════════════════════════════════ FLOATING STATUS -->
+<div class="status-panel" id="statusPanel">
+  <div style="padding:14px 16px;border-bottom:1px solid var(--border-ghost);display:flex;align-items:center;justify-content:space-between;">
+    <div class="flex items-center gap-2">
+      <div id="panelDot" class="pulse-dot" style="width:6px;height:6px;border-radius:50%;background:#ef4444;"></div>
+      <span style="font-size:12px;font-weight:600;">System Status</span>
+    </div>
+    <button onclick="togglePanel()" style="background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:2px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+  </div>
+  <div class="panel-content" style="padding:14px 16px;transition:opacity 0.3s;">
+    <div class="flex flex-col gap-3">
+      <div class="flex justify-between items-center">
+        <span style="font-size:11px;color:var(--text-secondary);">Server</span>
+        <span class="mono" style="font-size:11px;" id="panelServer">OFFLINE</span>
+      </div>
+      <div class="flex justify-between items-center">
+        <span style="font-size:11px;color:var(--text-secondary);">Products</span>
+        <span class="mono" style="font-size:11px;font-weight:500;color:var(--text-primary);" id="panelProducts">—</span>
+      </div>
+      <div class="flex justify-between items-center">
+        <span style="font-size:11px;color:var(--text-secondary);">Latency</span>
+        <span class="mono" style="font-size:11px;" id="panelLatency">—</span>
+      </div>
+      <div class="flex justify-between items-center">
+        <span style="font-size:11px;color:var(--text-secondary);">Dim</span>
+        <span class="mono" style="font-size:11px;color:var(--text-secondary);" id="panelDim">—</span>
+      </div>
+    </div>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-ghost);">
+      <div class="mono" style="font-size:10px;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Index Folder</div>
+      <div class="mono" style="font-size:10px;color:var(--accent-cyan);word-break:break-all;" id="panelFolder">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ CAMERA MODAL -->
+<div class="camera-modal" id="cameraModal">
+  <div style="position:relative;width:min(600px,90vw);">
+    <div class="glass rounded-2xl overflow-hidden" style="border:1px solid rgba(6,182,212,0.2);">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border-ghost);display:flex;align-items:center;justify-content:space-between;">
+        <div class="mono" style="font-size:11px;letter-spacing:0.12em;color:var(--accent-cyan);">◉ LIVE CAPTURE</div>
+        <button class="btn-ghost btn-sm" onclick="closeCamera()">CLOSE</button>
+      </div>
+      <div style="position:relative;background:#000;aspect-ratio:16/9;">
+        <video id="cameraFeed" style="width:100%;height:100%;object-fit:cover;" autoplay muted playsinline></video>
+        <!-- LENS OVERLAY -->
+        <div style="position:absolute;inset:0;pointer-events:none;">
+          <div style="position:absolute;inset:0;border:1px solid rgba(6,182,212,0.15);"></div>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);">
+            <div class="lens-ring" style="width:200px;height:200px;margin-left:-100px;margin-top:-100px;top:0;left:0;"></div>
+            <div class="lens-ring" style="width:140px;height:140px;margin-left:-70px;margin-top:-70px;top:0;left:0;animation-delay:0.4s;"></div>
+            <div class="lens-ring" style="width:80px;height:80px;margin-left:-40px;margin-top:-40px;top:0;left:0;animation-delay:0.8s;"></div>
+          </div>
+          <!-- Corner marks -->
+          <div style="position:absolute;top:20px;left:20px;width:20px;height:20px;border-top:2px solid rgba(6,182,212,0.6);border-left:2px solid rgba(6,182,212,0.6);"></div>
+          <div style="position:absolute;top:20px;right:20px;width:20px;height:20px;border-top:2px solid rgba(6,182,212,0.6);border-right:2px solid rgba(6,182,212,0.6);"></div>
+          <div style="position:absolute;bottom:20px;left:20px;width:20px;height:20px;border-bottom:2px solid rgba(6,182,212,0.6);border-left:2px solid rgba(6,182,212,0.6);"></div>
+          <div style="position:absolute;bottom:20px;right:20px;width:20px;height:20px;border-bottom:2px solid rgba(6,182,212,0.6);border-right:2px solid rgba(6,182,212,0.6);"></div>
+        </div>
+      </div>
+      <div style="padding:16px 20px;display:flex;gap:10px;justify-content:center;">
+        <button class="btn-primary" onclick="capturePhoto()">
+          <span style="display:flex;align-items:center;gap:8px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            Capture Frame
+          </span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<canvas id="captureCanvas" class="hidden"></canvas>
+
+<!-- ═══════════════════════════════════════════ LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <div style="position:relative;max-width:90vw;" onclick="event.stopPropagation()">
+    <img id="lightboxImg" class="lightbox-img" alt="Product detail">
+    <div style="position:absolute;bottom:-48px;left:0;right:0;text-align:center;">
+      <div class="mono" style="font-size:11px;color:rgba(255,255,255,0.4);" id="lightboxMeta"></div>
+    </div>
+    <button onclick="closeLightbox()" style="position:absolute;top:-16px;right:-16px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ SCRIPT -->
+<script>
+const API = 'http://127.0.0.1:8000';
+let cameraStream = null;
+let lastSearchTime = 0;
+let panelCollapsed = false;
+
+// ── Clock
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toTimeString().split(' ')[0];
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ── Health + Stats polling
+async function pollStatus() {
+  try {
+    const t0 = performance.now();
+    const [h, s] = await Promise.all([
+      fetch(API + '/health').then(r => r.json()),
+      fetch(API + '/index/stats').then(r => r.json())
+    ]);
+    const latency = Math.round(performance.now() - t0);
+
+    // Header
+    const dot = document.querySelector('#header-status .pulse-dot');
+    dot.style.background = '#22c55e';
+    document.querySelector('#header-status span').textContent = 'ENGINE ONLINE';
+    document.querySelector('#header-status span').style.color = '#22c55e';
+
+    // Panel
+    document.getElementById('panelDot').style.background = '#22c55e';
+    document.getElementById('panelServer').textContent = 'ONLINE';
+    document.getElementById('panelServer').style.color = '#22c55e';
+    document.getElementById('panelProducts').textContent = h.indexed_images.toLocaleString();
+    document.getElementById('panelLatency').textContent = latency + ' ms';
+    document.getElementById('panelLatency').style.color = latency < 100 ? '#22c55e' : latency < 300 ? '#eab308' : '#ef4444';
+    document.getElementById('panelDim').textContent = s.embedding_dim;
+    document.getElementById('panelFolder').textContent = s.image_folder;
+
+    // Sidebar stats
+    document.getElementById('statDim').textContent = s.embedding_dim;
+    document.getElementById('statDim').style.color = 'var(--accent-cyan)';
+    document.getElementById('statIndexed').textContent = h.indexed_images.toLocaleString() + ' images';
+    document.getElementById('statIndexed').style.color = 'var(--accent-cyan)';
+
+  } catch {
+    document.querySelector('#header-status .pulse-dot').style.background = '#ef4444';
+    document.querySelector('#header-status span').textContent = 'SERVER OFFLINE';
+    document.querySelector('#header-status span').style.color = '#ef4444';
+    document.getElementById('panelServer').textContent = 'OFFLINE';
+    document.getElementById('panelServer').style.color = '#ef4444';
+  }
+}
+pollStatus();
+setInterval(pollStatus, 8000);
+
+// ── Drag & Drop
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) setPreview(file);
+});
+
+document.getElementById('fileInput').addEventListener('change', function() {
+  if (this.files[0]) setPreview(this.files[0]);
+});
+
+function setPreview(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('previewImg').src = e.target.result;
+    document.getElementById('emptyState').classList.add('hidden');
+    document.getElementById('previewState').classList.remove('hidden');
+    document.getElementById('searchBtn').disabled = false;
+  };
+  reader.readAsDataURL(file);
+  dropZone._file = file;
+}
+
+function clearImage() {
+  document.getElementById('previewState').classList.add('hidden');
+  document.getElementById('emptyState').classList.remove('hidden');
+  document.getElementById('searchBtn').disabled = true;
+  document.getElementById('fileInput').value = '';
+  dropZone._file = null;
+}
+
+// ── SEARCH
+async function doSearch() {
+  const file = dropZone._file;
+  if (!file) return;
+  const topK = document.getElementById('topK').value;
+
+  // Show scan
+  const scan = document.getElementById('scanOverlay');
+  scan.classList.remove('hidden');
+  const btn = document.getElementById('searchBtn');
+  btn.disabled = true;
+  document.getElementById('searchBtnText').innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Analyzing…`;
+  document.getElementById('searchBtnText').querySelector('svg').style.animation = 'spin 1s linear infinite';
+
+  // Fake scan percent
+  let pct = 0;
+  const pctEl = document.getElementById('scanPercent');
+  const pctTimer = setInterval(() => { pct = Math.min(pct + Math.random() * 8, 92); pctEl.textContent = Math.round(pct) + '%'; }, 120);
+
+  const form = new FormData();
+  form.append('file', file);
+  const t0 = performance.now();
+
+  try {
+    const res = await fetch(`${API}/search?top_k=${topK}`, { method: 'POST', body: form });
+    if (!res.ok) throw new Error('Server error ' + res.status);
+    const data = await res.json();
+    const latency = Math.round(performance.now() - t0);
+    lastSearchTime = latency;
+
+    clearInterval(pctTimer);
+    pctEl.textContent = '100%';
+    setTimeout(() => scan.classList.add('hidden'), 400);
+
+    // Update latency display
+    document.getElementById('statLatency').textContent = latency + ' ms';
+    document.getElementById('statLatency').style.color = latency < 100 ? '#22c55e' : latency < 400 ? '#eab308' : '#ef4444';
+    document.getElementById('panelLatency').textContent = latency + ' ms';
+    document.getElementById('latLabel').textContent = latency + ' ms';
+    const barW = Math.max(5, Math.min(100, 100 - latency / 20));
+    document.getElementById('latBar').style.width = barW + '%';
+
+    renderResults(data.results, data.query_file, latency);
+  } catch (err) {
+    clearInterval(pctTimer);
+    scan.classList.add('hidden');
+    alert('Search failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    document.getElementById('searchBtnText').innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Run Recognition`;
+  }
+}
+
+// ── RENDER RESULTS
+function renderResults(results, queryFile, latency) {
+  const grid = document.getElementById('resultsGrid');
+  const meta = document.getElementById('resultsMeta');
+  const empty = document.getElementById('emptyResults');
+  grid.innerHTML = '';
+
+  if (!results.length) {
+    meta.classList.add('hidden');
+    empty.classList.remove('hidden');
+    return;
+  }
+
+  meta.classList.remove('hidden');
+  empty.classList.add('hidden');
+  document.getElementById('resultsTitle').textContent = `${results.length} Products Found`;
+  document.getElementById('resultsSub').textContent = `Query: ${queryFile} · ${latency}ms · Ranked by cosine similarity`;
+
+  results.forEach((r, i) => {
+    const filename = r.path.replace(/\\/g, '/').split('/').pop();
+    const imgUrl = `${API}/images/${filename}`;
+    const scorePct = ((r.score + 1) / 2 * 100).toFixed(1);
+    const scoreRaw = (r.score * 100).toFixed(1);
+
+    let scoreCls = 'score-low', scoreColor = '#ef4444';
+    if (r.score > 0.8) { scoreCls = 'score-high'; scoreColor = '#22c55e'; }
+    else if (r.score > 0.5) { scoreCls = 'score-med'; scoreColor = '#eab308'; }
+
+    const card = document.createElement('div');
+    card.className = 'result-card glass ' + scoreCls;
+    card.style.animationDelay = (i * 0.06) + 's';
+    card.style.border = '1px solid rgba(255,255,255,0.07)';
+    card.innerHTML = `
+      <img src="${imgUrl}" style="width:100%;display:block;min-height:120px;background:#111;"
+        onerror="this.style.minHeight='120px';this.style.background='#1a1a2e';"
+        onclick="openLightbox('${imgUrl}','Rank #${r.rank} · Score: ${scoreRaw}%')">
+      <div class="card-overlay"></div>
+      <div style="position:absolute;top:10px;left:10px;">
+        <div style="background:rgba(0,0,0,0.7);border:1px solid ${scoreColor}40;border-radius:6px;padding:4px 9px;backdrop-filter:blur(8px);">
+          <div class="mono" style="font-size:13px;font-weight:500;color:${scoreColor};">${scoreRaw}<span style="font-size:9px;opacity:0.7;">%</span></div>
+        </div>
+      </div>
+      <div style="position:absolute;top:10px;right:10px;">
+        <div style="background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.08);border-radius:5px;padding:3px 7px;">
+          <div class="mono" style="font-size:10px;color:rgba(255,255,255,0.5);">#${r.rank}</div>
+        </div>
+      </div>
+      <div class="card-actions">
+        <div class="mono" style="font-size:10px;color:rgba(255,255,255,0.5);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${filename}</div>
+        <button class="btn-ghost btn-sm" onclick="reSearch('${imgUrl}', '${filename}', event)" style="width:100%;justify-content:center;display:flex;gap:5px;align-items:center;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          Re-Search
+        </button>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+function clearResults() {
+  document.getElementById('resultsGrid').innerHTML = '';
+  document.getElementById('resultsMeta').classList.add('hidden');
+  document.getElementById('emptyResults').classList.add('hidden');
+}
+
+// ── RE-SEARCH (fetch result image and search with it)
+async function reSearch(imgUrl, filename, e) {
+  e.stopPropagation();
+  try {
+    const res = await fetch(imgUrl);
+    const blob = await res.blob();
+    const file = new File([blob], filename, { type: blob.type });
+    setPreview(file);
+    dropZone._file = file;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(doSearch, 600);
+  } catch { alert('Could not fetch that image for re-search.'); }
+}
+
+// ── LIGHTBOX
+function openLightbox(src, meta) {
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightboxMeta').textContent = meta;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox() { document.getElementById('lightbox').classList.remove('open'); }
+
+// ── CAMERA
+async function openCamera() {
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+    document.getElementById('cameraFeed').srcObject = cameraStream;
+    document.getElementById('cameraModal').classList.add('open');
+  } catch { alert('Camera access denied or unavailable.'); }
+}
+function closeCamera() {
+  if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+  document.getElementById('cameraModal').classList.remove('open');
+}
+function capturePhoto() {
+  const video = document.getElementById('cameraFeed');
+  const canvas = document.getElementById('captureCanvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  canvas.toBlob(blob => {
+    const file = new File([blob], 'camera_capture.jpg', { type: 'image/jpeg' });
+    setPreview(file);
+    dropZone._file = file;
+    closeCamera();
+  }, 'image/jpeg', 0.92);
+}
+
+// ── REBUILD INDEX
+async function rebuildIndex() {
+  try {
+    await fetch(API + '/index/rebuild', { method: 'POST' });
+    alert('Index rebuild started in the background. Stats will refresh shortly.');
+    setTimeout(pollStatus, 3000);
+  } catch { alert('Failed to trigger rebuild.'); }
+}
+
+// ── STATUS PANEL TOGGLE
+function togglePanel() {
+  const panel = document.getElementById('statusPanel');
+  panelCollapsed = !panelCollapsed;
+  if (panelCollapsed) {
+    panel.style.height = '48px';
+    panel.style.overflow = 'hidden';
+  } else {
+    panel.style.height = '';
+    panel.style.overflow = '';
+  }
+}
+
+// ── KEYBOARD
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeLightbox(); closeCamera(); }
+  if (e.key === 'Enter' && !document.getElementById('searchBtn').disabled) doSearch();
+});
+
+// Spin keyframe injection
+const style = document.createElement('style');
+style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+document.head.appendChild(style);
+</script>
+</body>
+</html>
